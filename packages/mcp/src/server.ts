@@ -70,21 +70,28 @@ export function startServer(options: ServerOptions = {}) {
   const sendToBrowser = browserRpc.sendRpc
 
   // --- WebSocket: browser connects here ---
-
+  // Standalone WS server on wsPort (localhost) for desktop/local dev
   const wss = new WebSocketServer({ port: wsPort, host: '127.0.0.1' })
+  // noServer WS for handling upgrade on the HTTP port at /ws path
+  const wssInline = new WebSocketServer({ noServer: true })
 
-  wss.on('connection', (ws) => {
-    browserRpc.handleConnection(ws)
+  function attachWsHandlers(wsServer: InstanceType<typeof WebSocketServer>) {
+    wsServer.on('connection', (ws) => {
+      browserRpc.handleConnection(ws)
 
-    ws.on('message', (raw) => {
-      const data = typeof raw === 'string' ? raw : Buffer.from(raw as Buffer).toString('utf-8')
-      browserRpc.handleMessage(data, ws)
+      ws.on('message', (raw) => {
+        const data = typeof raw === 'string' ? raw : Buffer.from(raw as Buffer).toString('utf-8')
+        browserRpc.handleMessage(data, ws)
+      })
+
+      ws.on('close', () => {
+        browserRpc.handleClose(ws)
+      })
     })
+  }
 
-    ws.on('close', () => {
-      browserRpc.handleClose(ws)
-    })
-  })
+  attachWsHandlers(wss)
+  attachWsHandlers(wssInline)
 
   // --- HTTP server ---
 
@@ -164,11 +171,23 @@ export function startServer(options: ServerOptions = {}) {
     return response
   })
 
+  function handleUpgrade(req: import('http').IncomingMessage, socket: import('stream').Duplex, head: Buffer) {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+    if (url.pathname === '/ws') {
+      wssInline.handleUpgrade(req, socket, head, (ws) => {
+        wssInline.emit('connection', ws, req)
+      })
+    } else {
+      socket.destroy()
+    }
+  }
+
   function close() {
     browserRpc.close()
     mcpSessions.clear()
     wss.close()
+    wssInline.close()
   }
 
-  return { app, wss, httpPort, close }
+  return { app, wss, wssInline, httpPort, handleUpgrade, close }
 }

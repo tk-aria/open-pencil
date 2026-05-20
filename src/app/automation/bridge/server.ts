@@ -10,6 +10,23 @@ import { randomHex } from '@open-pencil/core/random'
 import { makeFigmaFromStore } from '@/app/automation/bridge/figma-factory'
 import { createAutomationCommandHandlers } from '@/app/automation/bridge/handlers'
 import type { EditorStore } from '@/app/editor/active-store'
+
+function resolveWsUrl(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    const params = new URLSearchParams(window.location.search)
+    const mcpHost = params.get('mcp')
+    if (mcpHost) {
+      const proto = mcpHost.startsWith('localhost') || mcpHost.startsWith('127.0.0.1') ? 'ws:' : 'wss:'
+      return `${proto}//${mcpHost}/ws`
+    }
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      return `${proto}//${window.location.host}/ws`
+    }
+  }
+  return `ws://127.0.0.1:${AUTOMATION_WS_PORT}`
+}
+
 export function connectAutomation(getStore: () => EditorStore, authToken: string | null = null) {
   const token = authToken ?? randomHex(32)
   let ws: WebSocket | null = null
@@ -28,7 +45,7 @@ export function connectAutomation(getStore: () => EditorStore, authToken: string
 
   function connect() {
     try {
-      ws = new WebSocket(`ws://127.0.0.1:${AUTOMATION_WS_PORT}`)
+      ws = new WebSocket(resolveWsUrl())
     } catch (e) {
       console.error(
         '[Automation] WebSocket constructor failed:',
