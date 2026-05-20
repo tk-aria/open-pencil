@@ -90,7 +90,8 @@ onMounted(async () => {
     const mcp = await spawnMCPIfNeeded()
     mcpCleanup.value = mcp?.disconnect ?? null
     const tauri = isTauri()
-    if (import.meta.env.DEV || tauri) {
+    const selfHosted = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    if (import.meta.env.DEV || tauri || selfHosted) {
       automationCleanup.value = connectAutomation(getActiveStore, mcp?.authToken ?? null).disconnect
     }
   } catch (e) {
