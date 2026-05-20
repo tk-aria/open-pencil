@@ -1,6 +1,9 @@
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { resolveCommand } from 'package-manager-detector/commands'
 import { detect, getUserAgent } from 'package-manager-detector/detect'
 import { WebSocketServer } from 'ws'
@@ -170,6 +173,13 @@ export function startServer(options: ServerOptions = {}) {
     }
     return response
   })
+
+  // --- Static file serving for self-hosted web app ---
+  const webRoot = process.env.OPENPENCIL_WEB_ROOT?.trim() || join(resolve(), 'web')
+  if (existsSync(webRoot)) {
+    app.use('/*', serveStatic({ root: webRoot, rewriteRequestPath: (path) => path }))
+    app.get('/*', serveStatic({ root: webRoot, rewriteRequestPath: () => '/index.html' }))
+  }
 
   function handleUpgrade(req: import('http').IncomingMessage, socket: import('stream').Duplex, head: Buffer) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
