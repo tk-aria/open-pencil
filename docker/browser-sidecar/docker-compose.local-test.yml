@@ -1,0 +1,30 @@
+# Local-only smoke test for the "browser sidecar" pattern.
+# Run from open-pencil/: docker compose -f docker/browser-sidecar/docker-compose.local-test.yml up --build
+# NOT used in the cluster deploy — Deployment/Service manifests are separate.
+services:
+  mcp:
+    image: openpencil-mcp:local
+    container_name: openpencil-mcp-local
+    ports:
+      - "7600:7600"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=7600
+      - OPENPENCIL_MCP_CORS_ORIGIN=*
+
+  browser:
+    image: openpencil-browser-sidecar:local
+    container_name: openpencil-browser-local
+    depends_on:
+      - mcp
+    ports:
+      - "16080:6080"
+      - "15900:5900"
+    environment:
+      - OPENPENCIL_URL=http://mcp:7600/
+    volumes:
+      - chrome-profile:/data/chrome-profile
+    shm_size: "1gb"
+
+volumes:
+  chrome-profile:
